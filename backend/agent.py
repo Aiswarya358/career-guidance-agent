@@ -4,11 +4,17 @@ from dotenv import load_dotenv
 import os
 import json
 
-# Load env
+# -------------------------------
+# LOAD ENV
+# -------------------------------
 load_dotenv(override=True)
 
 api_key = os.getenv("GROQ_API_KEY")
-print(f"API Key loaded: {api_key[:10] if api_key else 'NOT FOUND'}")
+
+if not api_key:
+    raise ValueError("❌ GROQ_API_KEY not found in .env")
+
+print(f"✅ API Key loaded: {api_key[:10]}...")
 
 llm = ChatGroq(
     api_key=api_key,
@@ -16,17 +22,17 @@ llm = ChatGroq(
 )
 
 # -------------------------------
-# STEP 1: Extract structured data
+# STEP 1: EXTRACT DATA (STRICT JSON)
 # -------------------------------
 def extract_data(resume_text: str) -> dict:
     print("🔍 Extracting structured data...")
 
     messages = [
-        SystemMessage(content="You are a strict JSON generator."),
+        SystemMessage(content="You ONLY return valid JSON. No explanation."),
         HumanMessage(content=f"""
-Analyze this resume and return ONLY valid JSON.
+You MUST return valid JSON.
 
-Format:
+STRICT FORMAT:
 {{
   "candidate_name": "string",
   "job_role": "string",
@@ -34,23 +40,29 @@ Format:
   "experience": "string"
 }}
 
+RULES:
+- No text before or after JSON
+- No markdown
+- No explanation
+
 Resume:
 {resume_text}
-
-IMPORTANT:
-- Return ONLY JSON
-- No explanation
 """)
     ]
 
     response = llm.invoke(messages)
 
+    print("🔴 RAW LLM OUTPUT:\n", response.content)
+
     try:
         data = json.loads(response.content)
-        print("✅ Structured data extracted")
+        print("✅ JSON parsed successfully")
         return data
-    except:
-        print("❌ JSON parsing failed, fallback used")
+
+    except Exception as e:
+        print("❌ JSON parsing failed:", str(e))
+
+        # fallback (DON'T REMOVE)
         return {
             "candidate_name": "Candidate",
             "job_role": "Software Engineer",
@@ -59,20 +71,20 @@ IMPORTANT:
         }
 
 # -------------------------------
-# STEP 2: Generate structured jobs
+# STEP 2: JOB GENERATION (JSON)
 # -------------------------------
 def find_jobs(skills: list, role: str) -> list:
     print("🔎 Generating job listings...")
 
     messages = [
-        SystemMessage(content="You are a job generator that outputs JSON only."),
+        SystemMessage(content="Return ONLY JSON."),
         HumanMessage(content=f"""
-Based on these skills and role, generate 5 jobs in India.
+Generate 5 job listings in India.
 
 Skills: {skills}
 Role: {role}
 
-Return ONLY JSON:
+STRICT FORMAT:
 
 [
   {{
@@ -82,40 +94,49 @@ Return ONLY JSON:
   }}
 ]
 
-No explanation.
+RULES:
+- Only JSON
+- No explanation
 """)
     ]
 
     response = llm.invoke(messages)
 
+    print("🔴 RAW JOB OUTPUT:\n", response.content)
+
     try:
         jobs = json.loads(response.content)
-        print("✅ Jobs generated")
+        print("✅ Jobs parsed successfully")
         return jobs
-    except:
-        print("❌ Job parsing failed")
+
+    except Exception as e:
+        print("❌ Job parsing failed:", str(e))
         return []
 
 # -------------------------------
-# STEP 3: Generate cover letter
+# STEP 3: COVER LETTER
 # -------------------------------
 def generate_cover_letter(skills: list, role: str, name: str) -> str:
     print("✍️ Generating cover letter...")
 
     messages = [
-        SystemMessage(content="You write professional cover letters."),
+        SystemMessage(content="Write a professional cover letter."),
         HumanMessage(content=f"""
-Write a professional cover letter.
+Write a clean professional cover letter.
 
 Name: {name}
 Role: {role}
 Skills: {skills}
 
-Keep it clean, 3 paragraphs.
+3 paragraphs:
+1. Intro
+2. Skills
+3. Closing
 """)
     ]
 
     response = llm.invoke(messages)
+
     print("✅ Cover letter generated")
     return response.content
 
@@ -124,13 +145,13 @@ Keep it clean, 3 paragraphs.
 # -------------------------------
 def run_agent(resume_text: str) -> dict:
     try:
-        # Step 1
+        # STEP 1
         data = extract_data(resume_text)
 
-        # Step 2
+        # STEP 2
         jobs = find_jobs(data["skills"], data["job_role"])
 
-        # Step 3
+        # STEP 3
         cover_letter = generate_cover_letter(
             data["skills"],
             data["job_role"],
@@ -140,8 +161,8 @@ def run_agent(resume_text: str) -> dict:
         return {
             "candidate_name": data["candidate_name"],
             "job_role": data["job_role"],
-            "skills": data["skills"],  # ✅ now list
-            "job_listings": jobs,      # ✅ structured list
+            "skills": data["skills"],
+            "job_listings": jobs,
             "cover_letter": cover_letter
         }
 

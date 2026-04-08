@@ -7,3 +7,5 @@ PyPDF2
 langchain-groq
 python-dotenv
 python-dotenv
+langchain
+langchain-core
