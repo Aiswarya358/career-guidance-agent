@@ -2,7 +2,9 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from dotenv import load_dotenv
 import os
+import json
 
+# Load env
 load_dotenv(override=True)
 
 api_key = os.getenv("GROQ_API_KEY")
@@ -13,124 +15,136 @@ llm = ChatGroq(
     model="llama-3.3-70b-versatile"
 )
 
+# -------------------------------
+# STEP 1: Extract structured data
+# -------------------------------
+def extract_data(resume_text: str) -> dict:
+    print("🔍 Extracting structured data...")
 
-def extract_skills(resume_text: str) -> dict:
-    """Step 1 - Extract skills from resume"""
-    print("🔍 Extracting skills from resume...")
-    
     messages = [
-        SystemMessage(content="You are a professional resume analyzer."),
+        SystemMessage(content="You are a strict JSON generator."),
         HumanMessage(content=f"""
-Analyze this resume and extract:
-1. Candidate full name
-2. Top 5 technical skills
-3. Years of experience
-4. Most suitable job role
+Analyze this resume and return ONLY valid JSON.
+
+Format:
+{{
+  "candidate_name": "string",
+  "job_role": "string",
+  "skills": ["skill1", "skill2", "skill3", "skill4", "skill5"],
+  "experience": "string"
+}}
 
 Resume:
 {resume_text}
 
-Reply in this exact format:
-Name: [name]
-Skills: [skill1, skill2, skill3, skill4, skill5]
-Experience: [X years]
-Best Role: [job role]
+IMPORTANT:
+- Return ONLY JSON
+- No explanation
 """)
     ]
-    
+
     response = llm.invoke(messages)
-    content = response.content
-    
-    name = "Candidate"
-    role = "Software Developer"
-    
-    for line in content.split('\n'):
-        if line.startswith('Name:'):
-            name = line.replace('Name:', '').strip()
-        if line.startswith('Best Role:'):
-            role = line.replace('Best Role:', '').strip()
-    
-    print(f"✅ Skills extracted for: {name}")
-    return {"skills": content, "candidate_name": name, "job_role": role}
 
+    try:
+        data = json.loads(response.content)
+        print("✅ Structured data extracted")
+        return data
+    except:
+        print("❌ JSON parsing failed, fallback used")
+        return {
+            "candidate_name": "Candidate",
+            "job_role": "Software Engineer",
+            "skills": ["Python"],
+            "experience": "0 years"
+        }
 
-def find_jobs(skills: str, role: str) -> list:
-    """Step 2 - Find matching jobs"""
-    print("🔎 Finding matching jobs...")
-    
+# -------------------------------
+# STEP 2: Generate structured jobs
+# -------------------------------
+def find_jobs(skills: list, role: str) -> list:
+    print("🔎 Generating job listings...")
+
     messages = [
-        SystemMessage(content="You are a job search expert for the Indian job market."),
+        SystemMessage(content="You are a job generator that outputs JSON only."),
         HumanMessage(content=f"""
-Based on these skills, suggest 5 job opportunities in India:
+Based on these skills and role, generate 5 jobs in India.
 
-{skills}
+Skills: {skills}
+Role: {role}
 
-For each job provide:
-- Company Name
-- Job Title  
-- Required Skills
-- HR Email (realistic example)
-- Location
+Return ONLY JSON:
 
-Format each job numbered 1-5, separated by blank lines.
+[
+  {{
+    "company": "string",
+    "role": "string",
+    "location": "string"
+  }}
+]
+
+No explanation.
 """)
     ]
-    
+
     response = llm.invoke(messages)
-    jobs = [j for j in response.content.split('\n\n') if j.strip()]
-    
-    print(f"✅ Found {len(jobs)} job matches!")
-    return jobs
 
+    try:
+        jobs = json.loads(response.content)
+        print("✅ Jobs generated")
+        return jobs
+    except:
+        print("❌ Job parsing failed")
+        return []
 
-def generate_cover_letter(skills: str, role: str, name: str) -> str:
-    """Step 3 - Generate cover letter"""
+# -------------------------------
+# STEP 3: Generate cover letter
+# -------------------------------
+def generate_cover_letter(skills: list, role: str, name: str) -> str:
     print("✍️ Generating cover letter...")
-    
-    messages = [
-        SystemMessage(content="You are an expert career coach who writes outstanding cover letters."),
-        HumanMessage(content=f"""
-Write a professional cover letter for:
 
-Candidate: {name}
+    messages = [
+        SystemMessage(content="You write professional cover letters."),
+        HumanMessage(content=f"""
+Write a professional cover letter.
+
+Name: {name}
 Role: {role}
 Skills: {skills}
 
-Write 3 paragraphs:
-1. Introduction and interest in the role
-2. Key skills and achievements
-3. Strong closing with call to action
+Keep it clean, 3 paragraphs.
 """)
     ]
-    
+
     response = llm.invoke(messages)
-    print("✅ Cover letter generated!")
+    print("✅ Cover letter generated")
     return response.content
 
-
+# -------------------------------
+# MAIN PIPELINE
+# -------------------------------
 def run_agent(resume_text: str) -> dict:
-    """Run the full pipeline"""
     try:
         # Step 1
-        skills_data = extract_skills(resume_text)
-        
+        data = extract_data(resume_text)
+
         # Step 2
-        jobs = find_jobs(skills_data["skills"], skills_data["job_role"])
-        
+        jobs = find_jobs(data["skills"], data["job_role"])
+
         # Step 3
         cover_letter = generate_cover_letter(
-            skills_data["skills"],
-            skills_data["job_role"],
-            skills_data["candidate_name"]
+            data["skills"],
+            data["job_role"],
+            data["candidate_name"]
         )
-        
+
         return {
-            "candidate_name": skills_data["candidate_name"],
-            "job_role": skills_data["job_role"],
-            "skills": skills_data["skills"],
-            "job_listings": jobs,
+            "candidate_name": data["candidate_name"],
+            "job_role": data["job_role"],
+            "skills": data["skills"],  # ✅ now list
+            "job_listings": jobs,      # ✅ structured list
             "cover_letter": cover_letter
         }
+
     except Exception as e:
         print(f"❌ Error in agent: {str(e)}")
         raise e
