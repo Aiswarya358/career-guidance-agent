@@ -36,4 +36,5 @@ All strategic documentation and planning materials can be found in the `/artifac
 ---
 **Developed by:** Aiswarya K Rejikumar  
 **Institution:** Sree Chitra Thirunal College Of Engineering (SCTCE)
+
 **Program:** IBM SkillsBuild AI Strategy & Business Intelligence Internship (AICTE CSRBOX)
